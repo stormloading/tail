@@ -14,9 +14,9 @@ MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
-    m_scroll = false;
+    m_scroll = true;
     m_code = CodecUtf8;
-
+    m_rowCountDisplay = 1000;
     ui->setupUi(this);
     init();
 
@@ -54,6 +54,12 @@ MainWindow::MainWindow(QWidget *parent) :
 MainWindow::~MainWindow()
 {
     delete ui;
+    while (m_vecData.size() > 0)
+    {
+        char *lineData = m_vecData[0];
+        delete [] lineData;
+        m_vecData.removeFirst();
+    }
 }
 #include <QDebug>
 void MainWindow::onTimer()
@@ -74,7 +80,38 @@ void MainWindow::onTimer()
         while ((lineLength = m_file.readLine(buf, 2047)) > 0)
         {
             qDebug()<<"len"<<lineLength;
-            strDis += getCodecString(buf);
+            QString tmp = getCodecString(buf);
+            if (!m_filter.isEmpty())
+            {
+                if (tmp.contains(m_filter))
+                {
+                    strDis += tmp;
+                }
+            }
+            else if (!m_block.isEmpty())
+            {
+                if (!tmp.contains(m_block))
+                {
+                    strDis += tmp;
+                }
+            }
+            else
+            {
+                strDis += tmp;
+            }
+            ui->textEdit->textCursor().insertText(strDis);
+            char *lineData = new char[lineLength + 1];
+            memset(lineData, 0, lineLength + 1);
+            memcpy(lineData, buf, lineLength);
+            m_vecData.push_back(lineData);
+
+            while (m_vecData.size() > m_rowCountDisplay)
+            {
+                qDebug()<<"del"<<m_vecData.at(0);
+                char *lineData = m_vecData[0];
+                delete [] lineData;
+                m_vecData.removeFirst();
+            }
             memset(buf, 0, 2048);
         }
         ui->textEdit->textCursor().insertText(strDis);
@@ -98,17 +135,109 @@ void MainWindow::onScrollClicked()
 
 void MainWindow::onCodecChanged(int index)
 {
+    m_timer.stop();
     m_code = CodecDisplay(index);
+
+    ui->textEdit->clear();
+    QString strDis;
+    for (int i=0; i < m_vecData.size(); i++)
+    {
+        QString tmp = getCodecString(m_vecData.at(i));
+        if (!m_filter.isEmpty())
+        {
+            if (tmp.contains(m_filter))
+            {
+                strDis += tmp;
+            }
+        }
+        else if (!m_block.isEmpty())
+        {
+            if (!tmp.contains(m_block))
+            {
+                strDis += tmp;
+            }
+        }
+    }
+    ui->textEdit->textCursor().insertText(strDis);
+    m_timer.start(100);
+}
+
+void MainWindow::onFontChanged(const QFont &font)
+{
+    ui->textEdit->setCurrentFont(font);
+    ui->textEdit->setFontPointSize(ui->cBox_PointSize->currentText().toInt());
+}
+
+void MainWindow::onFontSizeChanged(int)
+{
+    ui->textEdit->setFontPointSize(ui->cBox_PointSize->currentText().toInt());
+}
+
+void MainWindow::onFilterChanged(const QString &text)
+{
+    m_filter = text;
+    if (text.isEmpty())
+    {
+        ui->lEdit_Block->setEnabled(true);
+    }
+    else
+    {
+        m_timer.stop();
+        ui->lEdit_Block->setEnabled(false);
+        ui->textEdit->clear();
+        QString strDis;
+        for (int i=0; i < m_vecData.size(); i++)
+        {
+            QString tmp = getCodecString(m_vecData.at(i));
+            if (tmp.contains(text))
+            {
+                strDis += tmp;
+            }
+        }
+        ui->textEdit->textCursor().insertText(strDis);
+        m_timer.start(100);
+    }
+}
+
+void MainWindow::onBlockChanged(const QString &text)
+{
+    m_block = text;
+    if (text.isEmpty())
+    {
+        ui->lEdit_Filter->setEnabled(true);
+    }
+    else
+    {
+        m_timer.stop();
+        ui->lEdit_Filter->setEnabled(false);
+        ui->textEdit->clear();
+        QString strDis;
+        for (int i=0; i < m_vecData.size(); i++)
+        {
+            QString tmp = getCodecString(m_vecData.at(i));
+            if (!tmp.contains(text))
+            {
+                strDis += tmp;
+            }
+        }
+        ui->textEdit->textCursor().insertText(strDis);
+        m_timer.start(100);
+    }
 }
 
 void MainWindow::init()
 {
+    ui->textEdit->setReadOnly(true);
     QPalette palette = ui->textEdit->palette();
     palette.setColor(QPalette::All, QPalette::Base, Qt::black);
     palette.setColor(QPalette::All, QPalette::Text, Qt::green);
     ui->textEdit->setPalette(palette);
 //    setWindowOpacity(0.7);
-    ui->textEdit->setFontFamily(QString::fromLocal8Bit("微软雅黑"));
+//    ui->textEdit->setWindowOpacity(0);
+    QFont font(QString::fromLocal8Bit("微软雅黑"), 10);
+    ui->textEdit->setCurrentFont(font);
+    ui->cBox_Font->setCurrentFont(font);
+    ui->cBox_PointSize->setCurrentText(QString::number(10));
 
     ui->textEdit->viewport()->installEventFilter(this);
 
@@ -116,7 +245,11 @@ void MainWindow::init()
     connect(ui->ckBox_Scroll, SIGNAL(clicked(bool)), this, SLOT(onScrollClicked()));
     connect(ui->cBox_Code, SIGNAL(activated(int)), this, SLOT(onCodecChanged(int)));
 
-    ui->textEdit->setReadOnly(true);
+    connect(ui->cBox_Font, SIGNAL(currentFontChanged(const QFont&)), this, SLOT(onFontChanged(const QFont&)));
+    connect(ui->cBox_PointSize, SIGNAL(currentIndexChanged(int)), this, SLOT(onFontSizeChanged(int)));
+
+    connect(ui->lEdit_Filter, SIGNAL(textChanged(QString)), this, SLOT(onFilterChanged(QString)));
+    connect(ui->lEdit_Block, SIGNAL(textChanged(QString)), this, SLOT(onBlockChanged(QString)));
 }
 
 void MainWindow::initCodec()

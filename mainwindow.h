@@ -34,6 +34,12 @@ public slots:
     void onScrollClicked();
     void onCodecChanged(int index);
 
+    void onFontChanged(const QFont &font);
+    void onFontSizeChanged(int);
+
+    void onFilterChanged(const QString &text);
+    void onBlockChanged(const QString &text);
+
 protected:
     virtual bool eventFilter(QObject *watched, QEvent *event);
 
@@ -49,7 +55,11 @@ private:
     QFile m_file;
     qint64 m_index;
     bool m_scroll;
+    int m_rowCountDisplay;
     CodecDisplay m_code;
+    QVector<char *> m_vecData;
+    QString m_filter;
+    QString m_block;
 };
 
 #endif // MAINWINDOW_H
