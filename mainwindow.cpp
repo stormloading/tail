@@ -36,12 +36,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
     m_file.seek(m_index);
     QString strDis;
-    char buf[100];
-    memset(buf, 0, 2048);
-    while (m_file.read(buf, 100) > 0)
+    char buf[2048];
+    memset(buf, 0, 2047);
+    while (m_file.read(buf, 2047) > 0)
     {
         strDis += getCodecString(buf);
-        memset(buf, 0, 100);
+        memset(buf, 0, 2048);
     }
     ui->textEdit->textCursor().insertText(strDis);
     m_index = m_file.size();
