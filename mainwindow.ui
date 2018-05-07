@@ -6,12 +6,12 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1093</width>
-    <height>498</height>
+    <width>1166</width>
+    <height>499</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>tail -f</string>
   </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -25,7 +25,7 @@
         <item>
          <widget class="QCheckBox" name="ckBox_Scroll">
           <property name="text">
-           <string>滚动显示</string>
+           <string>Scroll</string>
           </property>
           <property name="checked">
            <bool>true</bool>
@@ -35,7 +35,7 @@
         <item>
          <widget class="QLabel" name="label">
           <property name="text">
-           <string>显示编码:</string>
+           <string>TextCode</string>
           </property>
          </widget>
         </item>
@@ -177,8 +177,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1093</width>
-     <height>28</height>
+     <width>1166</width>
+     <height>25</height>
     </rect>
    </property>
   </widget>

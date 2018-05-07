@@ -3,6 +3,7 @@
 #include <QFileDialog>
 #include <QScrollBar>
 
+#define TimerInterval 500
 CodecDesc gCodec[] =
 {
     CodecUtf8, "Utf-8",
@@ -15,109 +16,35 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     m_scroll = true;
-    m_code = CodecUtf8;
-    m_rowCountDisplay = 1000;
     ui->setupUi(this);
     init();
 
-    QString file = QFileDialog::getOpenFileName(this, "select file");
-    if (file.isEmpty())
-    {
-        return;
-    }
-    m_file.setFileName(file);
-    m_file.open(QIODevice::ReadOnly);
-    if (!m_file.isOpen())
-    {
-        return;
-    }
-
-    getIndexByRead(10);
-
-    m_file.seek(m_index);
-    QString strDis;
-    char buf[2048];
-    memset(buf, 0, 2047);
-    while (m_file.read(buf, 2047) > 0)
-    {
-        strDis += getCodecString(buf);
-        memset(buf, 0, 2048);
-    }
-    ui->textEdit->textCursor().insertText(strDis);
-    m_index = m_file.size();
-    m_file.close();
-
-    connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimer()));
-    m_timer.start(100);
+    onOpenFile();
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
-    while (m_vecData.size() > 0)
-    {
-        char *lineData = m_vecData[0];
-        delete [] lineData;
-        m_vecData.removeFirst();
-    }
+    m_workThread.quit();
+    m_workThread.wait();
 }
-#include <QDebug>
-void MainWindow::onTimer()
+
+void MainWindow::onOpenFile()
 {
-    m_file.open(QIODevice::ReadOnly);
-    if (!m_file.isOpen())
+    QString file = QFileDialog::getOpenFileName(this, "select file", "D:");
+    if (file.isEmpty())
     {
         return;
     }
-    qint64 size = m_file.size();
-    if (m_index < size)
-    {
-        m_file.seek(m_index);
-        QString strDis;
-        char buf[2048];
-        memset(buf, 0, 2048);
-        int lineLength = 0;
-        while ((lineLength = m_file.readLine(buf, 2047)) > 0)
-        {
-            qDebug()<<"len"<<lineLength;
-            QString tmp = getCodecString(buf);
-            if (!m_filter.isEmpty())
-            {
-                if (tmp.contains(m_filter))
-                {
-                    strDis += tmp;
-                }
-            }
-            else if (!m_block.isEmpty())
-            {
-                if (!tmp.contains(m_block))
-                {
-                    strDis += tmp;
-                }
-            }
-            else
-            {
-                strDis += tmp;
-            }
-            ui->textEdit->textCursor().insertText(strDis);
-            char *lineData = new char[lineLength + 1];
-            memset(lineData, 0, lineLength + 1);
-            memcpy(lineData, buf, lineLength);
-            m_vecData.push_back(lineData);
 
-            while (m_vecData.size() > m_rowCountDisplay)
-            {
-                qDebug()<<"del"<<m_vecData.at(0);
-                char *lineData = m_vecData[0];
-                delete [] lineData;
-                m_vecData.removeFirst();
-            }
-            memset(buf, 0, 2048);
-        }
-        ui->textEdit->textCursor().insertText(strDis);
-        m_index = size;
-    }
-    m_file.close();
+    ui->textEdit->clear();
+    emit locateIndex(file);
+    setWindowTitle("tail -f " + file);
+}
+
+void MainWindow::onScrollClicked()
+{
+    m_scroll = ui->ckBox_Scroll->isChecked();
     if (m_scroll)
     {
         QScrollBar *scrollbar = ui->textEdit->verticalScrollBar();
@@ -128,38 +55,10 @@ void MainWindow::onTimer()
     }
 }
 
-void MainWindow::onScrollClicked()
-{
-    m_scroll = ui->ckBox_Scroll->isChecked();
-}
-
 void MainWindow::onCodecChanged(int index)
 {
-    m_timer.stop();
-    m_code = CodecDisplay(index);
-
+    emit codecChanged(index);
     ui->textEdit->clear();
-    QString strDis;
-    for (int i=0; i < m_vecData.size(); i++)
-    {
-        QString tmp = getCodecString(m_vecData.at(i));
-        if (!m_filter.isEmpty())
-        {
-            if (tmp.contains(m_filter))
-            {
-                strDis += tmp;
-            }
-        }
-        else if (!m_block.isEmpty())
-        {
-            if (!tmp.contains(m_block))
-            {
-                strDis += tmp;
-            }
-        }
-    }
-    ui->textEdit->textCursor().insertText(strDis);
-    m_timer.start(100);
 }
 
 void MainWindow::onFontChanged(const QFont &font)
@@ -175,63 +74,68 @@ void MainWindow::onFontSizeChanged(int)
 
 void MainWindow::onFilterChanged(const QString &text)
 {
-    m_filter = text;
+    emit filterChanged(text);
     if (text.isEmpty())
     {
         ui->lEdit_Block->setEnabled(true);
     }
     else
     {
-        m_timer.stop();
         ui->lEdit_Block->setEnabled(false);
         ui->textEdit->clear();
-        QString strDis;
-        for (int i=0; i < m_vecData.size(); i++)
-        {
-            QString tmp = getCodecString(m_vecData.at(i));
-            if (tmp.contains(text))
-            {
-                strDis += tmp;
-            }
-        }
-        ui->textEdit->textCursor().insertText(strDis);
-        m_timer.start(100);
     }
 }
 
 void MainWindow::onBlockChanged(const QString &text)
 {
-    m_block = text;
+    emit blockChanged(text);
     if (text.isEmpty())
     {
         ui->lEdit_Filter->setEnabled(true);
     }
     else
     {
-        m_timer.stop();
         ui->lEdit_Filter->setEnabled(false);
         ui->textEdit->clear();
-        QString strDis;
-        for (int i=0; i < m_vecData.size(); i++)
-        {
-            QString tmp = getCodecString(m_vecData.at(i));
-            if (!tmp.contains(text))
-            {
-                strDis += tmp;
-            }
-        }
-        ui->textEdit->textCursor().insertText(strDis);
-        m_timer.start(100);
     }
+}
+
+void MainWindow::onDisplayText(QString text)
+{
+    ui->textEdit->textCursor().insertText(text);
+    if (m_scroll)
+    {
+        QScrollBar *scrollbar = ui->textEdit->verticalScrollBar();
+        if (scrollbar)
+        {
+            scrollbar->setSliderPosition(scrollbar->maximum());
+        }
+    }
+}
+
+void MainWindow::onError(QString error)
+{
+    ui->textEdit->textCursor().insertText(error);
 }
 
 void MainWindow::init()
 {
+    QMenu *menu = new QMenu("File");
+    menu->addAction("OpenFile", this, SLOT(onOpenFile()), QKeySequence(Qt::CTRL + Qt::Key_O));
+    menuBar()->addMenu(menu);
+
     ui->textEdit->setReadOnly(true);
-    QPalette palette = ui->textEdit->palette();
+
+    QPalette palette = this->palette();
+    palette.setColor(QPalette::All, QPalette::Window, Qt::gray);
+    palette.setColor(QPalette::All, QPalette::WindowText, Qt::black);
+    this->setPalette(palette);
+
+    palette = ui->textEdit->palette();
     palette.setColor(QPalette::All, QPalette::Base, Qt::black);
     palette.setColor(QPalette::All, QPalette::Text, Qt::green);
     ui->textEdit->setPalette(palette);
+
 //    setWindowOpacity(0.7);
 //    ui->textEdit->setWindowOpacity(0);
     QFont font(QString::fromLocal8Bit("微软雅黑"), 10);
@@ -250,6 +154,17 @@ void MainWindow::init()
 
     connect(ui->lEdit_Filter, SIGNAL(textChanged(QString)), this, SLOT(onFilterChanged(QString)));
     connect(ui->lEdit_Block, SIGNAL(textChanged(QString)), this, SLOT(onBlockChanged(QString)));
+
+    //multi thread
+    m_worker = new Worker;
+    m_worker->moveToThread(&m_workThread);
+    m_workThread.start();
+    connect(this, SIGNAL(locateIndex(QString)), m_worker, SLOT(onLocateIndex(QString)));
+    connect(m_worker, SIGNAL(errorOccured(QString)), this, SLOT(onError(QString)));
+    connect(m_worker, SIGNAL(displayText(QString)), this, SLOT(onDisplayText(QString)));
+    connect(this, SIGNAL(codecChanged(int)), m_worker, SLOT(onCodecChanged(int)));
+    connect(this, SIGNAL(filterChanged(QString)), m_worker, SLOT(onFilterChanged(QString)));
+    connect(this, SIGNAL(blockChanged(QString)), m_worker, SLOT(onBlockChanged(QString)));
 }
 
 void MainWindow::initCodec()
@@ -260,7 +175,240 @@ void MainWindow::initCodec()
     }
 }
 
-QString MainWindow::getCodecString(char *ch)
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == ui->textEdit->viewport())
+    {
+        if (event->type() == QEvent::MouseButtonDblClick ||
+                event->type() == QEvent::MouseButtonPress ||
+                event->type() == QEvent::ContextMenu)
+        {
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+Worker::Worker()
+{
+    m_code = CodecUtf8;
+    m_rowCountDisplay = 1000;
+    m_timer = NULL;
+    m_file = NULL;
+}
+
+Worker::~Worker()
+{
+    while (m_vecData.size() > 0)
+    {
+        char *lineData = m_vecData[0];
+        delete [] lineData;
+        m_vecData.removeFirst();
+    }
+    if (m_timer != NULL)
+    {
+        delete m_timer;
+        m_timer = NULL;
+    }
+    if (m_file != NULL)
+    {
+        delete m_file;
+        m_file = NULL;
+    }
+}
+
+void Worker::onLocateIndex(QString fileName)
+{
+    if (m_timer != NULL && m_timer->isActive())
+    {
+        m_timer->stop();
+    }
+
+    if (m_file == NULL)
+    {
+        m_file = new QFile;
+    }
+    m_file->setFileName(fileName);
+    m_file->open(QIODevice::ReadOnly);
+    if (!m_file->isOpen())
+    {
+        emit errorOccured("Open File Failed!");
+        return;
+    }
+
+    m_index = getIndexOfLine(10);
+    m_file->close();
+
+    if (m_index == -1)
+    {
+        return;
+    }
+
+    if (m_timer == NULL)
+    {
+        m_timer = new QTimer;
+        connect(m_timer, SIGNAL(timeout()), this, SLOT(onTimer()));
+    }
+    m_timer->start(TimerInterval);
+}
+
+void Worker::onTimer()
+{
+    m_file->open(QIODevice::ReadOnly);
+    if (!m_file->isOpen())
+    {
+        emit errorOccured("Open File Failed!");
+        m_timer->stop();
+        return;
+    }
+    qint64 size = m_file->size();
+    if (m_index < size)
+    {
+        if (!m_file->seek(m_index))
+        {
+            emit errorOccured("Seek Failed!");
+            m_timer->stop();
+            return;
+        }
+        QString strDis;
+        char buf[2048];
+        memset(buf, 0, 2048);
+        int lineLength = 0;
+        while ((lineLength = m_file->readLine(buf, 2047)) > 0)
+        {
+            QString tmp = getCodecString(buf);
+            filterLine(tmp);
+            strDis += tmp;
+            char *lineData = new char[lineLength + 1];
+            memset(lineData, 0, lineLength + 1);
+            memcpy(lineData, buf, lineLength);
+            m_vecData.push_back(lineData);
+
+            while (m_vecData.size() > m_rowCountDisplay)
+            {
+                char *lineData = m_vecData[0];
+                delete [] lineData;
+                m_vecData.removeFirst();
+            }
+            memset(buf, 0, 2048);
+        }
+        emit displayText(strDis);
+        m_index = size;
+    }
+    m_file->close();
+}
+
+void Worker::onCodecChanged(int codec)
+{
+    m_code = CodecDisplay(codec);
+
+    m_timer->stop();
+    QString strDis;
+    for (int i=0; i < m_vecData.size(); i++)
+    {
+        QString tmp = getCodecString(m_vecData.at(i));
+        filterLine(tmp);
+        strDis += tmp;
+    }
+    emit displayText(strDis);
+    m_timer->start(TimerInterval);
+}
+
+void Worker::onFilterChanged(QString filter)
+{
+    m_timer->stop();
+    m_filter = filter;
+    QString strDis;
+    for (int i=0; i < m_vecData.size(); i++)
+    {
+        QString tmp = getCodecString(m_vecData.at(i));
+        filterLine(tmp);
+        strDis += tmp;
+    }
+    emit displayText(strDis);
+    m_timer->start(TimerInterval);
+}
+
+void Worker::onBlockChanged(QString block)
+{
+    m_timer->stop();
+    m_block = block;
+    QString strDis;
+    for (int i=0; i < m_vecData.size(); i++)
+    {
+        QString tmp = getCodecString(m_vecData.at(i));
+        filterLine(tmp);
+        strDis += tmp;
+    }
+    emit displayText(strDis);
+    m_timer->start(TimerInterval);
+}
+
+qint64 Worker::getIndexOfLine(int line)
+{
+    bool allDisplay = false;
+    int bufLen = 1000;
+    char buf[1000];
+    memset(buf, 0, 1000);
+
+    qint64 index = -1;
+    qint64 size = m_file->size();
+    if (size <= bufLen)
+    {
+        bufLen = size;
+        allDisplay = true;
+        index = 0;
+    }
+    else
+    {
+        index = size - bufLen;
+    }
+
+    if (!m_file->seek(index))
+    {
+        emit errorOccured("Seek Failed!");
+        return -1;
+    }
+    int lineCount = 0;
+
+    while (m_file->read(buf, bufLen)> 0)
+    {
+        for (int i = bufLen; i > 0; i --)
+        {
+            if (buf[i-1] == '\n')
+            {
+                lineCount ++;
+                if (lineCount == line + 1)
+                {
+                    index = index + i;
+                    allDisplay = true;
+                    break;
+                }
+            }
+        }
+        if (!allDisplay)
+        {
+            if (index < bufLen)
+            {
+                bufLen = index;
+                index = 0;
+            }
+            else
+            {
+                index -= bufLen;
+            }
+            if (!m_file->seek(index))
+            {
+                emit errorOccured("Seek Failed!");
+                return -1;
+            }
+        }
+        memset(buf, 0, 1000);
+    }
+    return index;
+}
+
+QString Worker::getCodecString(char *ch)
 {
     switch (m_code) {
 //    case CodecASCII:
@@ -270,83 +418,25 @@ QString MainWindow::getCodecString(char *ch)
     case CodecUtf8:
         return QString::fromUtf8(ch);
     default:
+        return QString::fromUtf8(ch);
         break;
     }
-
 }
 
-qint64 MainWindow::getIndexByRead(int rowCount)
+void Worker::filterLine(QString &lineData)
 {
-    bool allDisplay = false;
-    int bufLen = 1000;
-    char buf[1000];
-    memset(buf, 0, 1000);
-
-    qint64 size = m_file.size();
-    if (size <= bufLen)
+    if (!m_filter.isEmpty())
     {
-        bufLen = size;
-        allDisplay = true;
-        m_index = 0;
-    }
-    else
-    {
-        m_index = size - bufLen;
-    }
-
-    if (!m_file.seek(m_index))
-    {
-        ui->textEdit->textCursor().insertText(QString("seek failed!"));
-        return -1;
-    }
-    int lineCount = 0;
-
-    while (m_file.read(buf, bufLen)> 0)
-    {
-        for (int i = bufLen; i > 0; i --)
+        if (!lineData.contains(m_filter))
         {
-            if (buf[i-1] == '\n')
-            {
-                lineCount ++;
-                if (lineCount == rowCount + 1)
-                {
-                    m_index = m_index + i;
-                    allDisplay = true;
-                    break;
-                }
-            }
-        }
-        if (!allDisplay)
-        {
-            if (m_index < bufLen)
-            {
-                bufLen = m_index;
-                m_index = 0;
-            }
-            else
-            {
-                m_index -= bufLen;
-            }
-            if (!m_file.seek(m_index))
-            {
-                ui->textEdit->textCursor().insertText(QString("seek failed!"));
-                return -1;
-            }
-        }
-        memset(buf, 0, 1000);
-    }
-    return m_index;
-}
-
-bool MainWindow::eventFilter(QObject *watched, QEvent *event)
-{
-    if (watched == ui->textEdit->viewport())
-    {
-        if (event->type() == QEvent::MouseButtonDblClick ||
-                event->type() == QEvent::MouseButtonPress)
-        {
-            return true;
+            lineData.clear();
         }
     }
-    return QMainWindow::eventFilter(watched, event);
+    if (!m_block.isEmpty())
+    {
+        if (lineData.contains(m_block))
+        {
+            lineData.clear();
+        }
+    }
 }
