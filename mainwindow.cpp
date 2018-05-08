@@ -31,7 +31,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::onOpenFile()
 {
-    QString file = QFileDialog::getOpenFileName(this, "select file", "D:");
+    QString file = QFileDialog::getOpenFileName(this, "select file");
     if (file.isEmpty())
     {
         return;
@@ -222,6 +222,12 @@ void Worker::onLocateIndex(QString fileName)
     if (m_timer != NULL && m_timer->isActive())
     {
         m_timer->stop();
+    }
+    while (m_vecData.size() > 0)
+    {
+        char *lineData = m_vecData[0];
+        delete [] lineData;
+        m_vecData.removeFirst();
     }
 
     if (m_file == NULL)
