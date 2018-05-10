@@ -16,8 +16,10 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     m_scroll = true;
+    m_clear = false;
     ui->setupUi(this);
     init();
+    m_format.setBackground(QBrush(Qt::darkYellow));
 
     onOpenFile();
 }
@@ -31,11 +33,16 @@ MainWindow::~MainWindow()
 
 void MainWindow::onOpenFile()
 {
-    QString file = QFileDialog::getOpenFileName(this, "select file");
+    if (m_lastFileName.isEmpty())
+    {
+        m_lastFileName = "";
+    }
+    QString file = QFileDialog::getOpenFileName(this, "select file", m_lastFileName);
     if (file.isEmpty())
     {
         return;
     }
+    m_lastFileName = file;
 
     ui->textEdit->clear();
     emit locateIndex(file);
@@ -58,7 +65,8 @@ void MainWindow::onScrollClicked()
 void MainWindow::onCodecChanged(int index)
 {
     emit codecChanged(index);
-    ui->textEdit->clear();
+    m_clear = true;
+//    ui->textEdit->clear();
 }
 
 void MainWindow::onFontChanged(const QFont &font)
@@ -75,6 +83,7 @@ void MainWindow::onFontSizeChanged(int)
 void MainWindow::onFilterChanged(const QString &text)
 {
     emit filterChanged(text);
+    m_filter = text;
     if (text.isEmpty())
     {
         ui->lEdit_Block->setEnabled(true);
@@ -82,7 +91,8 @@ void MainWindow::onFilterChanged(const QString &text)
     else
     {
         ui->lEdit_Block->setEnabled(false);
-        ui->textEdit->clear();
+        m_clear = true;
+//        ui->textEdit->clear();
     }
 }
 
@@ -96,13 +106,56 @@ void MainWindow::onBlockChanged(const QString &text)
     else
     {
         ui->lEdit_Filter->setEnabled(false);
-        ui->textEdit->clear();
+        m_clear = true;
+//        ui->textEdit->clear();
+    }
+}
+
+void MainWindow::onFullScreenClicked(bool checked)
+{
+    if (checked)
+    {
+        showFullScreen();
+    }
+    else
+    {
+        showNormal();
+    }
+}
+
+void MainWindow::onAutoLineFeed(bool checked)
+{
+    if (checked)
+    {
+        ui->textEdit->setWordWrapMode(QTextOption::WordWrap);
+    }
+    else
+    {
+        ui->textEdit->setWordWrapMode(QTextOption::NoWrap);
     }
 }
 
 void MainWindow::onDisplayText(QString text)
 {
-    ui->textEdit->textCursor().insertText(text);
+    if (m_clear)
+    {
+        ui->textEdit->clear();
+        m_clear = false;
+    }
+    QTextCursor cur = ui->textEdit->textCursor();
+    qint64 pos = cur.position();
+    cur.insertText(text);
+    if (!m_filter.isEmpty())
+    {
+        QTextDocument *doc = ui->textEdit->document();
+
+        while (!(cur = doc->find(m_filter, pos)).isNull())
+        {
+            cur.mergeCharFormat(m_format);
+            pos = cur.position();
+        }
+    }
+
     if (m_scroll)
     {
         QScrollBar *scrollbar = ui->textEdit->verticalScrollBar();
@@ -125,6 +178,8 @@ void MainWindow::init()
     menuBar()->addMenu(menu);
 
     ui->textEdit->setReadOnly(true);
+
+    ui->ckBox_LineFeed->setChecked(true);
 
     QPalette palette = this->palette();
     palette.setColor(QPalette::All, QPalette::Window, Qt::gray);
@@ -155,8 +210,12 @@ void MainWindow::init()
     connect(ui->lEdit_Filter, SIGNAL(textChanged(QString)), this, SLOT(onFilterChanged(QString)));
     connect(ui->lEdit_Block, SIGNAL(textChanged(QString)), this, SLOT(onBlockChanged(QString)));
 
+    connect(ui->ckBox_FullScreen, SIGNAL(clicked(bool)), this, SLOT(onFullScreenClicked(bool)));
+
+    connect(ui->ckBox_LineFeed, SIGNAL(clicked(bool)), this, SLOT(onAutoLineFeed(bool)));
+
     //multi thread
-    m_worker = new Worker;
+    m_worker = new Worker(ui->textEdit);
     m_worker->moveToThread(&m_workThread);
     m_workThread.start();
     connect(this, SIGNAL(locateIndex(QString)), m_worker, SLOT(onLocateIndex(QString)));
@@ -189,7 +248,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     return QMainWindow::eventFilter(watched, event);
 }
 
-Worker::Worker()
+Worker::Worker(QTextEdit *edit) :
+    m_editor(edit)
 {
     m_code = CodecUtf8;
     m_rowCountDisplay = 1000;

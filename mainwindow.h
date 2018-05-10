@@ -5,6 +5,8 @@
 #include <QTimer>
 #include <QFile>
 #include <QThread>
+#include <QTextCursor>
+#include <QTextEdit>
 namespace Ui {
 class MainWindow;
 }
@@ -50,6 +52,10 @@ public slots:
     void onFilterChanged(const QString &text);
     void onBlockChanged(const QString &text);
 
+    void onFullScreenClicked(bool checked);
+
+    void onAutoLineFeed(bool checked);
+
     //thread slots
     void onDisplayText(QString text);
     void onError(QString error);
@@ -63,24 +69,21 @@ private:
 
 private:
     Ui::MainWindow *ui;
-//    QTimer m_timer;
-//    QFile m_file;
-//    qint64 m_index;
     bool m_scroll;
-//    int m_rowCountDisplay;
-//    CodecDisplay m_code;
-//    QVector<char *> m_vecData;
-//    QString m_filter;
-//    QString m_block;
+    QString m_filter;
     QThread m_workThread;
     Worker *m_worker;
+    bool m_clear;
+
+    QString m_lastFileName;
+    QTextCharFormat m_format;
 };
 
 class Worker : public QObject
 {
     Q_OBJECT
 public:
-    Worker();
+    Worker(QTextEdit *edit);
     ~Worker();
 signals:
     void errorOccured(QString error);
@@ -109,6 +112,7 @@ private:
     QString m_filter;
     QString m_block;
     QVector<char *> m_vecData;
+    QTextEdit *m_editor;
 };
 
 #endif // MAINWINDOW_H

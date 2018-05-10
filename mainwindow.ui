@@ -23,6 +23,20 @@
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout">
         <item>
+         <widget class="QCheckBox" name="ckBox_FullScreen">
+          <property name="text">
+           <string>FullScreen</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="ckBox_LineFeed">
+          <property name="text">
+           <string>Auto Linefeed</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QCheckBox" name="ckBox_Scroll">
           <property name="text">
            <string>Scroll</string>
