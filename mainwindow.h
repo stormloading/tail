@@ -110,7 +110,7 @@ private:
     int m_rowCountDisplay;
 
     QString m_filter;
-    QString m_block;
+    QStringList m_block;
     QVector<char *> m_vecData;
     QTextEdit *m_editor;
 };

@@ -35,7 +35,7 @@ void MainWindow::onOpenFile()
 {
     if (m_lastFileName.isEmpty())
     {
-        m_lastFileName = "";
+        m_lastFileName = "D://yangyue//trunk//src//run//hmi//project//log";
     }
     QString file = QFileDialog::getOpenFileName(this, "select file", m_lastFileName);
     if (file.isEmpty())
@@ -398,7 +398,14 @@ void Worker::onFilterChanged(QString filter)
 void Worker::onBlockChanged(QString block)
 {
     m_timer->stop();
-    m_block = block;
+    m_block = block.split(";");
+    for (int i=0; i < m_block.size(); i++)
+    {
+        if (m_block.at(i).isEmpty())
+        {
+            m_block.removeAt(i);
+        }
+    }
     QString strDis;
     for (int i=0; i < m_vecData.size(); i++)
     {
@@ -500,9 +507,12 @@ void Worker::filterLine(QString &lineData)
     }
     if (!m_block.isEmpty())
     {
-        if (lineData.contains(m_block))
+        for (int i=0; i < m_block.size(); i++)
         {
-            lineData.clear();
+            if (lineData.contains(m_block.at(i)))
+            {
+                lineData.clear();
+            }
         }
     }
 }
